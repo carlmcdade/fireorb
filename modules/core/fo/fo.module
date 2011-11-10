@@ -1,0 +1,159 @@
+<?php
+
+	/**
+	*  define some constants and globals that can be easily changed. Done here because there maybe multiple modules.
+	*  taking care of different application sets
+	*/
+	
+    define('FO_TRIGGER', 'app');
+	define('FO_APPENTRY', 'ci');
+	define('FO_USERNAME', 'clock');
+	define('FO_PASSWORD', 'clockwork');
+	
+	function fo_applications(){
+			$applications = array(
+					'welcome',
+					'fireorb'
+					);
+			
+			return $applications;
+	}
+
+    /**
+     *  implement hook help
+     */
+    function fo_help($path) {
+        $help_text = '';
+
+        switch($path) {
+            case 'admin/help#ci':
+                $help_text = fo_1_text('FO is an example module demonstrating how to integrate <a href="http://www.codeigniter.com/">CodeIgniter</a>
+                    MVC applications into <a href="http://www.fireorb.info">FireOrb</a>.');
+                break;
+			case 'admin/modules#description':
+				return fo_1_text('Manages Codeigniter MVC applications within FireOrb.');
+        }
+
+        return $help_text;
+    }
+
+    /**
+     *  To set the permission to access the Codeigniter MVC applications
+     *  module.
+     */
+	 function fo_perm() {
+			$applications = fo_applications();
+			foreach($applications as $name){
+					$perms[] = 'access '. $name .' application';
+			}
+			
+        return $perms;
+    }
+
+    /**
+     *  hook menu
+     */
+    function fo_menu() {
+			
+		// get the controllers available
+		$applications = fo_applications();
+		
+        $items = array();
+		
+		
+		// loop through controller names and create menu path to each
+		foreach($applications as $name){
+				$items[] = array(
+					'path' => FO_TRIGGER . '/' . $name,
+					'title' => fo_1_text(''),
+					'callback' => 'fo_start_app',
+					'access' => user_access('access ' . $name . ' application'),
+					'type' => MENU_CALLBACK
+				);
+		}
+
+        return $items;
+    }
+
+    /**
+     *  Start the codeigniter application
+     */
+    function fo_start_app() {
+		global $base_url;
+		
+		// start bufffering output and wait for Codeigniter 
+        ob_start();
+		
+			$uri = _fo_process_request($_GET['q']);
+			$path = $base_url.'/'. FO_APPENTRY. '.php?';
+			
+			// will return a warning if not found suppress with a @ or turn off screen errors in settings
+			$output = _fo_get_file_contents( $path.'/'.$uri);
+			
+        ob_end_clean();
+		
+		return theme_fo($output);
+    }
+
+    /**
+     *  Theme the codeigniter application
+     */
+    function theme_fo($content) {
+		
+		// remove HTML body befor using the FireOrb template.
+		preg_match("/<body[^>]*>(.*)<\/body>/siU", $content, $text);
+		
+		if(trim($text['1']) != ''){
+				$content = $text['1'];
+		}
+		
+		print theme('page', $content);
+		
+    }
+
+    /**
+     *  Process the request into codeigniter understandable format
+	 *  TODO: change this to accomodate querystring URLs which are now support in Codeigninter
+     */
+    function _fo_process_request($query) {
+			
+        // take out the first portion of query
+        $start_length = strlen(FO_TRIGGER . '/');
+        
+        if(strpos($query, FO_TRIGGER . '/') !== FALSE) {
+            $query = substr($query, $start_length);
+        } else {
+            $query = '';
+        }
+        
+        $_SERVER['PATH_INFO'] = $query;
+		
+		return $_SERVER['PATH_INFO'];
+    }
+	
+	/**
+	*  Use curl to contact the codeigniter entry page which protected with http authentication to 
+	*  keep FireOrb modules as the only entry points to MVC applications.
+	*
+	*/
+	
+	function _fo_get_file_contents($URL)
+    {
+        $c = curl_init();
+        curl_setopt($c, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($c, CURLOPT_URL, $URL);
+		curl_setopt($c, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+		curl_setopt($c, CURLOPT_USERPWD, FO_USERNAME . ':' . FO_PASSWORD);  
+        $contents = curl_exec($c);
+        curl_close($c);
+
+        if ($contents){
+				return $contents;
+		}
+		else {
+				return FALSE;
+		}
+    }
+
+    
+?>
